@@ -11,37 +11,37 @@ import javax.annotation.PreDestroy
 
 @Component
 class Source(
-    @Value("\${source.binance.secret}")
-    var secret: String
+  @Value("\${source.binance.secret}")
+  var secret: String
 ) {
-    private val log = KotlinLogging.logger {}
-    private val noopCallback = WebSocketCallback { _: String? -> }
-    private val client: WebsocketClient = WebsocketClientImpl()
+  private val log = KotlinLogging.logger {}
+  private val noopCallback = WebSocketCallback { _: String? -> }
+  private val client: WebsocketClient = WebsocketClientImpl()
 
-    @PostConstruct
-    fun afterPropertiesSet() {
-        val project = "Kotlin and Spring Boot"
-        log.info { "Welcome $project" }
-        log.info { "Secret: $secret" }
+  @PostConstruct
+  fun afterPropertiesSet() {
+    val project = "Kotlin and Spring Boot"
+    log.info { "Welcome $project" }
+    log.info { "Secret: $secret" }
 
-        client.miniTickerStream(
-            "btcusdt",
-            noopCallback, ::onMessage,
-            noopCallback, ::onFailure
-        )
-    }
+    client.miniTickerStream(
+      "btcusdt",
+      noopCallback, ::onMessage,
+      noopCallback, ::onFailure
+    )
+  }
 
-    private fun onMessage(e: String) {
-        log.info { "message: $e" }
-    }
+  private fun onMessage(e: String) {
+    log.info { "message: $e" }
+  }
 
-    private fun onFailure(e: String) {
-        log.warn { e }
-    }
+  private fun onFailure(e: String) {
+    log.warn { e }
+  }
 
-    @PreDestroy
-    fun destroy() {
-        client.closeAllConnections()
-    }
+  @PreDestroy
+  fun destroy() {
+    client.closeAllConnections()
+  }
 
 }
