@@ -1,0 +1,12 @@
+logging:
+  config: "classpath:logback-spring.xml"
+  level:
+    root: info
+spring:
+  application:
+    name: cap-source
+
+source:
+  binance:
+    secret: # will be set via secrets
+

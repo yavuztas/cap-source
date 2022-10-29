@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <include resource="org/springframework/boot/logging/logback/defaults.xml" />
+
+  <springProperty scope="context" name="PROJECT" source="spring.application.name"/>
+  <springProperty scope="context" name="LOG_LEVEL" source="logging.level.root"/>
+  <property name="LOG_DIR" value="${HOME}/production/var/log" />
+
+  <include resource="org/springframework/boot/logging/logback/console-appender.xml" />
+
+  <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${LOG_DIR}/${PROJECT}.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <!-- daily rollover -->
+      <fileNamePattern>${LOG_DIR}/${PROJECT}.%d{yyyy-MM-dd}.log.zip</fileNamePattern>
+      <maxHistory>30</maxHistory>
+    </rollingPolicy>
+    <encoder>
+      <pattern>${FILE_LOG_PATTERN}</pattern>
+    </encoder>
+  </appender>
+
+  <springProfile name="local | dev">
+    <root level="${LOG_LEVEL}">
+      <appender-ref ref="CONSOLE" />
+      <appender-ref ref="FILE" />
+    </root>
+  </springProfile>
+
+  <springProfile name="prod">
+    <appender name="FILE_ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+      <queueSize>1000000</queueSize>
+      <discardingThreshold>0</discardingThreshold>
+      <appender-ref ref="FILE" />
+    </appender>
+    <root level="${LOG_LEVEL}">
+      <appender-ref ref="FILE_ASYNC" />
+    </root>
+  </springProfile>
+
+</configuration>

@@ -1,0 +1,3 @@
+<configuration>
+  <!-- to override binance-java-connector's logback.xml -->
+</configuration>
