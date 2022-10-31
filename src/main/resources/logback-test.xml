@@ -1,3 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-  <!-- to override binance-java-connector's logback.xml -->
+  <!-- this also suppresses binance-java-connector's logback.xml -->
+  <include resource="org/springframework/boot/logging/logback/defaults.xml" />
+  <include resource="org/springframework/boot/logging/logback/console-appender.xml" />
+
+  <root level="info">
+    <appender-ref ref="CONSOLE" />
+  </root>
 </configuration>

@@ -6,7 +6,17 @@ spring:
   application:
     name: cap-source
 
+app:
+  vertx:
+    event-loop-pool-size: 8
+  registry:
+    host: localhost
+    port: 7000
+    tcp_server_thread_pool: 4
+    feed_consumer_delay: 1200
+
 source:
   binance:
-    secret: # will be set via secrets
+    buffer-size: 1024
+    symbols: btcusdt,ethusdt
 
