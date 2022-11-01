@@ -17,7 +17,7 @@ class RingBuffer<T>(bufferSize: Int) {
   }
 
   private val buffer = mutableListOf<T?>().apply {
-    for (index in 0..bufferSize) {
+    for (index in 0 until bufferSize) {
       add(null)
     }
   }

@@ -49,7 +49,7 @@ class BinanceFeedSupplier(
     this.buffer.add(RawFeedData(message))
     // trigger consumers
     consumers.forEach { it.consume(this)}
-    log.info { "add buffer: ${buffer.size()}, write index: ${buffer.writeIndex()}" }
+    log.info { "supplied: ${message}, write index: ${buffer.writeIndex()}" }
   }
 
   private fun onFailure(e: String) {
