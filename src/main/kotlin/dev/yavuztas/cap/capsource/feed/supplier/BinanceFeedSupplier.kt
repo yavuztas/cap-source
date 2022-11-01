@@ -3,6 +3,7 @@ package dev.yavuztas.cap.capsource.feed.supplier
 import com.binance.connector.client.WebsocketClient
 import com.binance.connector.client.impl.WebsocketClientImpl
 import com.binance.connector.client.utils.WebSocketCallback
+import dev.yavuztas.cap.capsource.feed.FeedConsumer
 import dev.yavuztas.cap.capsource.feed.FeedData
 import dev.yavuztas.cap.capsource.feed.FeedSupplier
 import mu.KotlinLogging
@@ -25,15 +26,16 @@ class BinanceFeedSupplier(
   private val log = KotlinLogging.logger {}
   private val noopCallback = WebSocketCallback { _: String? -> }
   private val client: WebsocketClient = WebsocketClientImpl()
+  private val consumers: MutableList<FeedConsumer> = ArrayList()
 
-  // TODO will be replaced by a proper RingBuffer
+  //TODO will be replaced by a proper RingBuffer
   private val moduloBitMask = (bufferSize - 1).toLong()
   private val buffer: Array<FeedData?> = Array(bufferSize) { null }
   private val writeIndex: AtomicLong = AtomicLong(0)
 
   @PostConstruct
   fun init() {
-    // TODO register all symbols properly
+    //TODO register all symbols properly
     client.miniTickerStream(
       symbols[0],
       noopCallback, ::onMessage,
@@ -44,7 +46,8 @@ class BinanceFeedSupplier(
   private fun onMessage(message: String) {
     val index = relativeIndex(this.writeIndex.getAndIncrement())
     this.buffer[index] = FeedData(message)
-
+    // trigger consumers
+    consumers.forEach { it.consume(this)}
     log.info { "add buffer: ${buffer.size}, relative index: $index write index: ${writeIndex.get()}" }
   }
 
@@ -55,6 +58,10 @@ class BinanceFeedSupplier(
   @PreDestroy
   fun destroy() {
     client.closeAllConnections()
+  }
+
+  override fun addConsumer(consumer: FeedConsumer) {
+    consumers.add(consumer)
   }
 
   override fun writeIndex(): Long {

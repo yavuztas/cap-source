@@ -8,6 +8,5 @@ import org.springframework.boot.context.properties.ConstructorBinding
 data class RegistryProperties(
   val host: String,
   val port: Int,
-  val tcpServerThreadPool: Int,
-  val feedConsumerDelay: Long
+  val tcpServerThreadPool: Int
 )

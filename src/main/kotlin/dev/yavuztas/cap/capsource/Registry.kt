@@ -14,8 +14,7 @@ import io.vertx.core.net.NetServerOptions
 import io.vertx.core.net.NetSocket
 import io.vertx.core.net.impl.NetSocketImpl
 import mu.KotlinLogging
-import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.Executors
 import javax.annotation.PostConstruct
 import javax.annotation.PreDestroy
 
@@ -31,7 +30,6 @@ class Registry(
 
   private val log = KotlinLogging.logger {}
   private val clients: MutableSet<NetSocket> = ConcurrentHashSet()
-  private val consumers: ArrayList<FeedDataConsumer> = ArrayList()
 
   inner class TcpServer(
     private val options: NetServerOptions
@@ -59,20 +57,17 @@ class Registry(
   }
 
   /**
-   * @param delay: in miliseconds
+   * @param readIndex: starting index from FeedSupplier
    */
   inner class FeedDataConsumer(
-    private var delay:Long = 1200
+    private var readIndex: Long = 0
   ) : FeedConsumer {
 
-    private var future: ScheduledFuture<*>? = null
-    private var readIndex:Long = 0
+    private val executor = Executors.newSingleThreadExecutor()
 
-    override fun consume(readIndex: Long, supplier: FeedSupplier) {
-      if (future != null) return // already consuming
-      this.readIndex = readIndex
-      // submit to internal vertx event pool to consume concurrently
-      future = vertx.nettyEventLoopGroup().scheduleAtFixedRate({
+    override fun consume(supplier: FeedSupplier) {
+      // consume in a non-blocking way
+      executor.submit {
         log.info { "<consume> readIndex: ${this.readIndex} <=> writeIndex: ${supplier.writeIndex()}" }
         this.readIndex = supplier.forEachRemaining(this.readIndex) { data ->
           log.info { "<consume> read remaining data: $data" }
@@ -80,12 +75,7 @@ class Registry(
           // readonly copy to protect against post-write
           publish(data.asReadOnly())
         }
-      }, 0, delay, TimeUnit.MILLISECONDS)
-
-    }
-
-    fun stop() {
-      future?.cancel(true)
+      }
     }
 
   }
@@ -102,11 +92,9 @@ class Registry(
       log.info { "Registry server started on ${options.port}" }
       // create and start consuming for each supplier
       suppliers.forEach { supplier ->
-        val consumer = FeedDataConsumer(props.feedConsumerDelay)
-        consumer.consume(supplier.writeIndex() - 1, supplier)
-        consumers.add(consumer)
+        supplier.addConsumer(FeedDataConsumer(supplier.writeIndex() - 1))
       }
-      log.info { "Initialized feed consumers: ${consumers.size}" }
+      log.info { "Initialized feed consumers: ${suppliers.size}" }
     }.onFailure { e ->
       log.error("Registry server start-up failed host: ${options.host}, port: ${options.port}", e)
     }
@@ -114,22 +102,15 @@ class Registry(
 
   @PreDestroy
   fun destroy() {
-    // TODO do we really need to stop consumers? Or Vertx handles this??
-    consumers.forEach { it.stop() }
     vertx.close()
   }
 
   private fun publish(feed: ByteBuf) {
     clients.stream()
       .forEach { socket ->
-        // TODO find out the default queue size
         // write is asynchronious, and it's queued internally via Netty
-        writeToSocket(socket, feed)
+        (socket as NetSocketImpl).writeMessage(feed)
       }
-  }
-
-  private fun writeToSocket(socket: NetSocket, data: ByteBuf) {
-    (socket as NetSocketImpl).writeMessage(data)
   }
 
 }
