@@ -1,6 +1,7 @@
 package dev.yavuztas.cap.capsource
 
-import dev.yavuztas.cap.capsource.feed.FeedData
+import dev.yavuztas.cap.capsource.config.properties.RegistryProperties
+import dev.yavuztas.cap.capsource.feed.RawFeedData
 import io.vertx.core.Vertx
 import io.vertx.core.net.NetSocket
 import spock.lang.Specification
@@ -16,7 +17,8 @@ class RegistrySpec extends Specification {
 
   def setup() {
     vertx = Vertx.vertx()
-    registry = new Registry(vertx, Collections.emptyList())
+    def props = new RegistryProperties('localhost', 7000, 4)
+    registry = new Registry(props, vertx, Collections.emptyList())
 
     def ac = new AsyncConditions(1)
     def future = registry.init()
@@ -73,7 +75,7 @@ class RegistrySpec extends Specification {
 
     when:
     for (i in 0..<2) {
-      registry.publish(new FeedData("Booo!").asReadOnly())
+      registry.publish(new RawFeedData("Booo!").asReadOnly())
     }
 
     then:

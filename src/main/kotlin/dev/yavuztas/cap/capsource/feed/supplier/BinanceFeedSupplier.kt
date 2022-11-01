@@ -5,12 +5,15 @@ import com.binance.connector.client.impl.WebsocketClientImpl
 import com.binance.connector.client.utils.WebSocketCallback
 import dev.yavuztas.cap.capsource.feed.FeedConsumer
 import dev.yavuztas.cap.capsource.feed.FeedData
+import dev.yavuztas.cap.capsource.feed.RawFeedData
 import dev.yavuztas.cap.capsource.feed.FeedSupplier
+import dev.yavuztas.cap.capsource.util.RingBuffer
 import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.util.concurrent.atomic.AtomicLong
+import java.util.*
 import java.util.function.Consumer
+import java.util.stream.Collectors
 import javax.annotation.PostConstruct
 import javax.annotation.PreDestroy
 
@@ -28,27 +31,25 @@ class BinanceFeedSupplier(
   private val client: WebsocketClient = WebsocketClientImpl()
   private val consumers: MutableList<FeedConsumer> = ArrayList()
 
-  //TODO will be replaced by a proper RingBuffer
-  private val moduloBitMask = (bufferSize - 1).toLong()
-  private val buffer: Array<FeedData?> = Array(bufferSize) { null }
-  private val writeIndex: AtomicLong = AtomicLong(0)
+  private val buffer: RingBuffer<FeedData> = RingBuffer(bufferSize)
 
   @PostConstruct
   fun init() {
-    //TODO register all symbols properly
-    client.miniTickerStream(
-      symbols[0],
+    // register all symbols given
+    val stream = Arrays.stream(symbols)
+      .map { s -> "$s@miniTicker" }
+      .collect(Collectors.toCollection { ArrayList() })
+    client.combineStreams(stream,
       noopCallback, ::onMessage,
       noopCallback, ::onFailure
     )
   }
 
   private fun onMessage(message: String) {
-    val index = relativeIndex(this.writeIndex.getAndIncrement())
-    this.buffer[index] = FeedData(message)
+    this.buffer.add(RawFeedData(message))
     // trigger consumers
     consumers.forEach { it.consume(this)}
-    log.info { "add buffer: ${buffer.size}, relative index: $index write index: ${writeIndex.get()}" }
+    log.info { "add buffer: ${buffer.size()}, write index: ${buffer.writeIndex()}" }
   }
 
   private fun onFailure(e: String) {
@@ -65,26 +66,15 @@ class BinanceFeedSupplier(
   }
 
   override fun writeIndex(): Long {
-    return writeIndex.get()
+    return this.buffer.writeIndex()
   }
 
   override fun get(readIndex: Long): FeedData? {
-    val index = relativeIndex(readIndex)
-    return this.buffer[index]
+    return this.buffer.get(readIndex)
   }
 
-  override fun forEachRemaining(readIndex: Long, action: Consumer<in FeedData>): Long {
-    val writeIndex = this.writeIndex.get()
-    var start = if (readIndex < 0) 0 else readIndex
-    while (start < writeIndex) {
-      action.accept(this.buffer[relativeIndex(start)]!!)
-      start++
-    }
-    return writeIndex
-  }
-
-  private fun relativeIndex(index: Long): Int {
-    return (index and moduloBitMask).toInt()
+  override fun forEachRemaining(readIndex: Long, action: Consumer<FeedData>): Long {
+    return this.buffer.forEachRemaining(readIndex, action)
   }
 
 }

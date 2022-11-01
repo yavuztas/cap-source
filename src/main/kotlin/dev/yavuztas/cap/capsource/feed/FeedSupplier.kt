@@ -13,6 +13,6 @@ interface FeedSupplier {
   /**
    * @return write index at the time of consuming
    */
-  fun forEachRemaining(readIndex: Long, action: Consumer<in FeedData>): Long
+  fun forEachRemaining(readIndex: Long, action: Consumer<FeedData>): Long
 
 }
