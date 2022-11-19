@@ -2,9 +2,32 @@ logging:
   config: "classpath:logback-spring.xml"
   level:
     root: info
+server:
+  tomcat:
+    threads:
+      min-spare: 5
+      max: 20
 spring:
+  main:
+    banner-mode: off
   application:
     name: cap-source
+
+management:
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      base-path: /management
+      exposure:
+        include:
+          - health
+          - info
+          - prometheus
+  metrics:
+    tags:
+      app: ${spring.application.name}
 
 app:
   vertx:
