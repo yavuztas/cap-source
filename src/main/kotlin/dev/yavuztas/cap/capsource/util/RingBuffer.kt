@@ -50,14 +50,18 @@ class RingBuffer<T>(bufferSize: Int) {
     return this.buffer[index]
   }
 
-  fun forEachRemaining(readIndex: Long, action: Consumer<T>): Long {
-    val writeIndex = this.writeIndex.get()
+  fun forEach(readIndex: Long, amount: Long, action: Consumer<T>): Long {
+    // we allow max. reading up to write index
+    val end = (readIndex + amount).coerceAtMost(this.writeIndex.get())
     var start = if (readIndex < 0) 0 else readIndex
-    while (start < writeIndex) {
-      action.accept(this.buffer[relativeIndex(start)]!!)
-      start++
+    while (start < end) {
+      action.accept(this.buffer[relativeIndex(start++)]!!)
     }
-    return writeIndex
+    return end
+  }
+
+  fun forEachRemaining(readIndex: Long, action: Consumer<T>): Long {
+    return forEach(readIndex, this.writeIndex.get() - readIndex, action)
   }
 
   private fun relativeIndex(index: Long): Int {

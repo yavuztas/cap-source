@@ -1,20 +1,19 @@
-package dev.yavuztas.cap.capsource
+package dev.yavuztas.cap.capsource.registry
 
 import dev.yavuztas.cap.capsource.config.properties.RegistryProperties
 import dev.yavuztas.cap.capsource.feed.FeedConsumer
 import dev.yavuztas.cap.capsource.feed.FeedSupplier
-import io.netty.buffer.ByteBuf
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.DeploymentOptions
 import io.vertx.core.Future
 import io.vertx.core.Vertx
-import io.vertx.core.impl.ConcurrentHashSet
 import io.vertx.core.net.NetServer
 import io.vertx.core.net.NetServerOptions
 import io.vertx.core.net.NetSocket
-import io.vertx.core.net.impl.NetSocketImpl
 import mu.KotlinLogging
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 import javax.annotation.PostConstruct
 import javax.annotation.PreDestroy
 
@@ -26,10 +25,15 @@ class Registry(
   private val props: RegistryProperties,
   private val vertx: Vertx,
   private val suppliers: List<FeedSupplier> = ArrayList()
-) {
+) : FeedConsumer {
 
   private val log = KotlinLogging.logger {}
-  private val clients: MutableSet<NetSocket> = ConcurrentHashSet()
+  private val clients: MutableMap<NetSocket, RegistryClient> = ConcurrentHashMap()
+
+  private val threadCounter = AtomicInteger(0)
+  private val readThreadPool = Executors.newFixedThreadPool(props.clientReadThreadPool) {
+      r -> Thread(r, "rcpool-thread-" + threadCounter.getAndIncrement())
+  }
 
   inner class TcpServer(
     private val options: NetServerOptions
@@ -46,7 +50,9 @@ class Registry(
     private fun onConnect(socket: NetSocket) {
       log.info { "client connected: ${socket.remoteAddress()}" }
       socket.closeHandler { onClose(socket) }
-      clients.add(socket)
+      val client = RegistryClient(socket)
+      suppliers.forEach { client.addStream(it) }
+      clients[socket] = client
     }
 
     private fun onClose(socket: NetSocket) {
@@ -56,28 +62,12 @@ class Registry(
 
   }
 
-  /**
-   * @param readIndex: starting index from FeedSupplier
-   */
-  inner class FeedDataConsumer(
-    private var readIndex: Long = 0
-  ) : FeedConsumer {
-
-    private val executor = Executors.newSingleThreadExecutor()
-
-    override fun consume(supplier: FeedSupplier) {
-      // consume in a non-blocking way
-      executor.submit {
-        log.info { "<consume> readIndex: ${this.readIndex} <=> writeIndex: ${supplier.writeIndex()}" }
-        this.readIndex = supplier.forEachRemaining(this.readIndex) { data ->
-          log.info { "<consume> read remaining data: $data" }
-          // incoming feed is excoded and published to the registry
-          // readonly copy to protect against post-write
-          publish(data.asReadOnly())
-        }
-      }
+  override fun consume(supplier: FeedSupplier) {
+    // consume in a separate worker pool, each client can consume concurrently
+    clients.forEach {
+      val client = it.value
+      readThreadPool.submit { client.read() }
     }
-
   }
 
   @PostConstruct
@@ -91,10 +81,7 @@ class Registry(
     ).onSuccess {
       log.info { "Registry server started on ${options.port}" }
       // create and start consuming for each supplier
-      suppliers.forEach { supplier ->
-        supplier.addConsumer(FeedDataConsumer(supplier.writeIndex() - 1))
-      }
-      log.info { "Initialized feed consumers: ${suppliers.size}" }
+      suppliers.forEach { it.addConsumer(this) }
     }.onFailure { e ->
       log.error("Registry server start-up failed host: ${options.host}, port: ${options.port}", e)
     }
@@ -102,15 +89,8 @@ class Registry(
 
   @PreDestroy
   fun destroy() {
+    readThreadPool.shutdown()
     vertx.close()
-  }
-
-  private fun publish(feed: ByteBuf) {
-    clients.stream()
-      .forEach { socket ->
-        // write is asynchronious, and it's queued internally via Netty
-        (socket as NetSocketImpl).writeMessage(feed)
-      }
   }
 
 }

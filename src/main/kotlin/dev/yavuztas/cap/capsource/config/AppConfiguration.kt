@@ -1,6 +1,6 @@
 package dev.yavuztas.cap.capsource.config
 
-import dev.yavuztas.cap.capsource.Registry
+import dev.yavuztas.cap.capsource.registry.Registry
 import dev.yavuztas.cap.capsource.config.properties.RegistryProperties
 import dev.yavuztas.cap.capsource.config.properties.VertxProperties
 import dev.yavuztas.cap.capsource.feed.FeedSupplier
