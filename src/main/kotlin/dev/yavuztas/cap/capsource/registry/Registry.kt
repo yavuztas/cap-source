@@ -48,7 +48,7 @@ class Registry(
     }
 
     private fun onConnect(socket: NetSocket) {
-      log.info { "client connected: ${socket.remoteAddress()}" }
+      log.debug { "client connected: ${socket.remoteAddress()}" }
       socket.closeHandler { onClose(socket) }
       val client = RegistryClient(socket)
       suppliers.forEach { client.addStream(it) }
@@ -56,7 +56,7 @@ class Registry(
     }
 
     private fun onClose(socket: NetSocket) {
-      log.info { "client disconnected: ${socket.remoteAddress()}" }
+      log.debug { "client disconnected: ${socket.remoteAddress()}" }
       clients.remove(socket)
     }
 
