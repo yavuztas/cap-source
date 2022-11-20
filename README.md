@@ -21,7 +21,6 @@ app:
     host: localhost
     port: 7000
     tcp_server_thread_pool: 4
-    client-read-thread-pool: 8
 
 source:
   binance:

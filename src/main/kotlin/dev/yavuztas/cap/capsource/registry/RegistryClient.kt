@@ -14,12 +14,16 @@ class RegistryClient (private val socket: NetSocket) {
     this.streams.add(FeedDataStream(supplier))
   }
 
+  /**
+   * Using this method in a single thread is alright.
+   * Because actual write happens asynchronously by a thread in vertx event loop.
+   * See: ConnectionBase.queueForWrite line 245.
+   */
   fun read() {
     streams.forEach {
-      it.pipeTo(socket)
       log.debug { "<read> client: ${socket.remoteAddress()}, readIndex: ${it.readIndex()}, writeIndex: ${it.supplier().writeIndex()}" }
+      it.pipeTo(socket) // actual write is asynchronous
     }
-
   }
 
 }

@@ -30,11 +30,6 @@ class Registry(
   private val log = KotlinLogging.logger {}
   private val clients: MutableMap<NetSocket, RegistryClient> = ConcurrentHashMap()
 
-  private val threadCounter = AtomicInteger(0)
-  private val readThreadPool = Executors.newFixedThreadPool(props.clientReadThreadPool) {
-      r -> Thread(r, "rcpool-thread-" + threadCounter.getAndIncrement())
-  }
-
   inner class TcpServer(
     private val options: NetServerOptions
   ) : AbstractVerticle() {
@@ -63,11 +58,8 @@ class Registry(
   }
 
   override fun consume(supplier: FeedSupplier) {
-    // consume in a separate worker pool, each client can consume concurrently
-    clients.forEach {
-      val client = it.value
-      readThreadPool.submit { client.read() }
-    }
+    // consume in vertx event pool, each client can consume concurrently
+    clients.forEach { it.value.read() }
   }
 
   @PostConstruct
@@ -89,7 +81,6 @@ class Registry(
 
   @PreDestroy
   fun destroy() {
-    readThreadPool.shutdown()
     vertx.close()
   }
 

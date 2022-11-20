@@ -15,6 +15,10 @@ import spock.lang.Specification
 import spock.util.concurrent.AsyncConditions
 
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.function.BiConsumer
 import java.util.function.Consumer
@@ -26,11 +30,13 @@ class RegistrySpec extends Specification {
   Vertx vertx
   Vertx clientVertx
   Registry registry
+  ScheduledExecutorService writeThread
 
   def setup() {
+    writeThread = Executors.newScheduledThreadPool(1, r -> new Thread(r, "write-thread"))
     clientVertx = Vertx.vertx(new VertxOptions().setEventLoopPoolSize(1))
     vertx = Vertx.vertx(new VertxOptions().setEventLoopPoolSize(8))
-    def props = new RegistryProperties('localhost', 7000, 4, 8)
+    def props = new RegistryProperties('localhost', 7000, 4)
     def mockSupplier = new FeedSupplier() {
 
       AtomicLong writeIndex = new AtomicLong(1L)
@@ -38,7 +44,7 @@ class RegistrySpec extends Specification {
       @Override
       void addConsumer(@NotNull FeedConsumer consumer) {
         // consume periodic
-        vertx.setPeriodic(1000, {consumer.consume(this)})
+        writeThread.scheduleAtFixedRate({ consumer.consume(this) }, 0, 200, TimeUnit.MILLISECONDS)
       }
 
       @Override
@@ -56,7 +62,7 @@ class RegistrySpec extends Specification {
         long to = Math.min(writeIndex.get(), amount)
         readIndex = readIndex < 0 ? 0 : readIndex
         (to - readIndex).times {
-          action.accept(new RawFeedData("Booo!"))
+          action.accept(new RawFeedData("message-${writeIndex.get()}"))
         }
         writeIndex.incrementAndGet()
         return to
@@ -79,6 +85,7 @@ class RegistrySpec extends Specification {
 
   def cleanup() {
     registry.destroy()
+    writeThread.shutdown()
     clientVertx.close()
   }
 
@@ -124,10 +131,32 @@ class RegistrySpec extends Specification {
     }
 
     then:
-    ac.await(10)
+    ac.await(5)
 
     cleanup:
     clients.each { (it as NetSocket).close() }
+  }
+
+  def 'test client message consume order'() {
+    given:
+    def order = new AtomicInteger(0)
+    when:
+    def ac = new AsyncConditions(10)
+    def client = createClient((s,m) -> {
+      log.info("client#${s.localAddress()} got message: ${m}")
+      def next = Integer.parseInt(m.split("-")[1])
+      if (next - order.getAndSet(next) > 1) {
+        throw new IllegalStateException("Client recieved message is not in order")
+      }
+      ac.evaluate { assert true }
+    })
+
+    then:
+    ac.await(5)
+    noExceptionThrown()
+
+    cleanup:
+    client.close()
   }
 
   def 'test slow client'() {
@@ -135,7 +164,7 @@ class RegistrySpec extends Specification {
     def clientReadIndex = new AtomicLong(0)
     def ac = new AsyncConditions(5)
     def client = createClient((s,m) -> {
-      Thread.sleep(2000)
+      Thread.sleep(1000)
       log.info("client#${s.localAddress()} readIndex: ${clientReadIndex.incrementAndGet()}, message: ${m}")
       ac.evaluate { assert true }
     })
