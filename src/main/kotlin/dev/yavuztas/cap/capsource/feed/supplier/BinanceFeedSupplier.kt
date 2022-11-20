@@ -47,9 +47,11 @@ class BinanceFeedSupplier(
 
   private fun onMessage(message: String) {
     this.buffer.add(RawFeedData(message))
-    // trigger consumers
+    log.debug { "supplied: ${message}, write index: ${buffer.writeIndex()}" }
+    // trigger consumers, currently binance's @miniTicker pushes every second only once.
+    // So, we don't need debouncing here
+    // TODO consider debouncing if the source pushes high throughput
     consumers.forEach { it.consume(this)}
-    log.info { "supplied: ${message}, write index: ${buffer.writeIndex()}" }
   }
 
   private fun onFailure(e: String) {
