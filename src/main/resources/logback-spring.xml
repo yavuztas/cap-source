@@ -21,6 +21,7 @@
   </appender>
 
   <springProfile name="local | dev">
+    <logger name="dev.yavuztas.cap.capsource" level="DEBUG"/>
     <root level="${LOG_LEVEL}">
       <appender-ref ref="CONSOLE" />
       <appender-ref ref="FILE" />

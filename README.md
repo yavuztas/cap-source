@@ -29,8 +29,8 @@ source:
 ```
 Via Gradle:
 ```shell
-# profile local enables logging
-./gradlew bootRun --args='--spring.profiles.active=local --logging.level.dev.yavuztas.cap.capsource=debug'
+# profile local or dev enables console logging
+./gradlew bootRun --args='--spring.profiles.active=local'
 ```
 
 ### 3rd Party Projects/Libraries
